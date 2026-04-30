@@ -1,118 +1,132 @@
-# Stellar Notes DApp
+CourtLink
 
-**Stellar Notes DApp** - Blockchain-Based Decentralized Note-Taking System
+Book a basketball court slot on-chain. No middlemen. No double-bookings. Guaranteed.
 
-## Project Description
 
-Stellar Notes DApp is a decentralized smart contract solution built on the Stellar blockchain using Soroban SDK. It provides a secure, immutable platform for managing personal notes directly on the blockchain. The contract ensures that your data is stored transparently and is only manageable through predefined smart contract functions, eliminating reliance on centralized database providers.
+Problem
+A group of students in Quezon City wants to play basketball but arrives at the local court only to find it was double-booked by a "middleman," resulting in lost time and a wasted cash deposit.
+Solution
+A mobile web app with a map interface where players book slots via a Soroban Smart Contract that holds the payment in escrow and issues an on-chain "Booking Pass," ensuring the slot is guaranteed — or the money is refunded automatically.
 
-The system allows users to create, view, and delete notes, leveraging the efficiency and security of the Stellar network. Each note is uniquely identified and stored within the contract's instance storage, ensuring data persistence and reliability.
+Vision & Purpose
+CourtLink transforms physical court space into a verifiable Real-World Asset (RWA) on Stellar. By eliminating the middleman, it solves double-booking fraud endemic to local recreational leagues across Southeast Asia. Court owners gain a trustless, instant-settlement payment layer in XLM/USDC that works where traditional banking often fails. Players gain peace of mind: their slot is either guaranteed or their money is back — enforced by code, not promises.
 
-## Project Vision
+Stellar Features Used
+FeatureRoleSoroban Smart ContractsEscrow logic, booking state machine, refund rulesXLM / USDC (SAC)Payment token held in escrowContract EventsSLT_BKND event triggers frontend map to mark slot unavailableLocal Anchor (optional)ArmenoTech / GCash bridge converts PHP → USDC on-chain
 
-Our vision is to revolutionize personal productivity in the digital age by:
+MVP Core Feature
+Player selects 2 PM slot on map
+  → Sends 50 XLM to CourtLink contract  (book_slot)
+  → Contract emits SLT_BKND event
+  → Funds held in escrow until game ends
+  → Court owner calls complete_booking  → funds released
+  → OR admin calls refund_booking       → player refunded
 
-- **Decentralizing Data**: Moving note-taking from centralized servers to a global, distributed blockchain
-- **Ensuring Ownership**: Empowering users to have complete control and ownership over their digital thoughts and information
-- **Guaranteeing Immutability**: Providing a permanent, tamper-proof record of notes that cannot be altered or deleted by third parties
-- **Enhancing Privacy**: Leveraging blockchain security to protect personal information from unauthorized access
-- **Building Trustless Systems**: Creating a platform where data integrity is guaranteed by code, not by company promises
+Suggested MVP Timeline
+DayMilestone1Scaffold Soroban contract; implement book_slot + complete_booking2Write & pass all 5 tests; deploy to Testnet3Build map UI (Leaflet.js); integrate Freighter wallet4Wire frontend → contract calls via Stellar SDK5Polish, record demo video, submit
 
-We envision a future where digital information is truly personal and sovereign, empowering individuals with complete autonomy over their digital assets.
+Prerequisites
 
-## Key Features
+Rust >= 1.74 with wasm32-unknown-unknown target
 
-### 1. **Simple Note Creation**
+bash  rustup target add wasm32-unknown-unknown
 
-- Create notes with just one function call
-- Specify title and content for each note
-- Automated ID generation for unique identification
-- Persistent storage on the Stellar blockchain
+Stellar CLI >= 22.0.0
 
-### 2. **Efficient Data Retrieval**
+bash  cargo install --locked stellar-cli --features opt
 
-- Fetch all stored notes in a single call
-- Structured data representation for easy frontend integration
-- Quick access to your entire note collection
-- Real-time synchronization with the blockchain state
+Node.js >= 18 (for frontend, optional at contract stage)
 
-### 3. **Secure Deletion**
 
-- Remove specific notes using their unique IDs
-- Permanent removal from the contract storage
-- Clean and efficient storage management
-- Immediate update of the note list after deletion
+Build
+bash# From the repo root
+stellar contract build
+Output WASM lands at:
+target/wasm32-unknown-unknown/release/courtlink.wasm
 
-### 4. **Transparency and Security**
+Test
+bashcargo test
+All 5 tests should pass:
 
-- View all note activities on the blockchain
-- Blockchain-based verification of all storage actions
-- Immutable records of note creation and deletion
-- Protected against unauthorized modifications
+test_book_and_complete_happy_path
+test_duplicate_booking_rejected
+test_storage_state_after_booking
+test_refund_returns_funds_to_player
+test_unauthorized_complete_rejected
 
-### 5. **Stellar Network Integration**
 
-- Leverages the high speed and low cost of Stellar
-- Built using the modern Soroban Smart Contract SDK
-- Scalable architecture for growing note collections
-- Interoperable with other Stellar-based services
+Deploy to Testnet
+bash# 1. Generate a testnet identity (skip if you already have one)
+stellar keys generate --global alice --network testnet
 
-## Contract Details
+# 2. Fund it from Friendbot
+stellar keys fund alice --network testnet
 
-- Contract Address: CBLU4IUASQ4WUMOXBFLZRSBBLILGOH33GS4LUPKFBCCCMJCDQNMF7G2M
-  (Screenshot has been removed)
+# 3. Deploy the contract
+stellar contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/courtlink.wasm \
+  --source alice \
+  --network testnet
+# → Returns CONTRACT_ID
 
-## Future Scope
+# 4. Initialise the contract
+stellar contract invoke \
+  --id CONTRACT_ID \
+  --source alice \
+  --network testnet \
+  -- initialize \
+  --admin ADMIN_ADDRESS \
+  --token XLM_SAC_ADDRESS
 
-### Short-Term Enhancements
+Sample CLI Invocations
+book_slot — Player books the 2 PM court slot
+bashstellar contract invoke \
+  --id CONTRACT_ID \
+  --source player_alice \
+  --network testnet \
+  -- book_slot \
+  --booking_id aabbccdd00000000000000000000000000000000000000000000000000000000 \
+  --player GPLAYER_ADDRESS \
+  --court_owner GOWNER_ADDRESS \
+  --court_id "Cubao Court 1" \
+  --slot_timestamp 1700000000 \
+  --amount 500000000
+complete_booking — Court owner releases escrow after game
+bashstellar contract invoke \
+  --id CONTRACT_ID \
+  --source court_owner \
+  --network testnet \
+  -- complete_booking \
+  --booking_id aabbccdd00000000000000000000000000000000000000000000000000000000 \
+  --caller GOWNER_ADDRESS
+refund_booking — Admin refunds a cancelled slot
+bashstellar contract invoke \
+  --id CONTRACT_ID \
+  --source admin \
+  --network testnet \
+  -- refund_booking \
+  --booking_id aabbccdd00000000000000000000000000000000000000000000000000000000
+get_booking — View a booking record
+bashstellar contract invoke \
+  --id CONTRACT_ID \
+  --network testnet \
+  -- get_booking \
+  --booking_id aabbccdd00000000000000000000000000000000000000000000000000000000
 
-1. **Note Encryption**: Support for end-to-end encryption of note content for enhanced privacy
-2. **Category Management**: Add tags and categories to organize notes efficiently
-3. **Rich Text Support**: Extend support beyond plain text to include Markdown and formatted content
-4. **Search Functionality**: Implement advanced search filters for large note collections
+Optional Edge: GCash/Maya Anchor Bridge
+Connect CourtLink to ArmenoTech (a Philippine Stellar Anchor).
+Players pay in PHP via GCash or Maya → anchor converts to USDC on Stellar → funds the escrow automatically. The blockchain is completely invisible to the end user.
 
-### Medium-Term Development
+Repository Structure
+courtlink/
+├── Cargo.toml
+├── README.md
+└── src/
+    ├── lib.rs      ← Soroban contract
+    └── test.rs     ← 5 unit tests
 
-5. **Collaborative Notes**: Implement multi-signature requirements for shared or collaborative note-taking
-   - Shared access for multiple addresses
-   - Permission-based editing and viewing
-   - Version history tracking
-6. **Notification System**: Off-chain bridge to alert users of new updates or shared notes
-7. **Asset Attachment**: Capability to attach digital assets or tokens to specific notes
-8. **Inter-Contract Integration**: Allow other smart contracts to interact with and store data in the notes contract
-
-### Long-Term Vision
-
-9. **Cross-Chain Synchronization**: Extend note storage to multiple blockchain networks
-10. **Decentralized UI Hosting**: Host the frontend on IPFS or similar decentralized platforms
-11. **AI-Powered Summarization**: Optional integration with AI to help users summarize their notes
-12. **Privacy Layers**: Implement zero-knowledge proofs for completely private note content
-13. **DAO Governance**: Community-driven protocol improvements and feature prioritization
-14. **Identity Management**: Integration with decentralized identity (DID) systems for user management
-
-### Enterprise Features
-
-15. **Corporate Documentation**: Adapt the system for secure corporate record-keeping
-16. **Immutable Logging**: Create time-locked logs for audit purposes
-17. **Automated Reporting**: Automatic note triggers for periodic reporting
-18. **Multi-Language Support**: Expand accessibility with internationalization
-
----
-
-## Technical Requirements
-
-- Soroban SDK
-- Rust programming language
-- Stellar blockchain network
-
-## Getting Started
-
-Deploy the smart contract to Stellar's Soroban network and interact with it using the three main functions:
-
-- `create_note()` - Create a new note with a title and content
-- `get_notes()` - Retrieve all stored notes from the contract
-- `delete_note()` - Remove a specific note by its ID
-
----
-
-**Stellar Notes DApp** - Securing Your Thoughts on the Blockchain
+License
+MIT © 2025 CourtLink Contributors
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
